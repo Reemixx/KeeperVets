@@ -77,13 +77,26 @@ Titre "3/5  Schema de la base distante"
 if ($LASTEXITCODE -ne 0) { Souci "Les migrations ont echoue."; exit 1 }
 Ok "Schema a jour"
 
-# --- Étape 4 : secrets -------------------------------------------------------
-Titre "4/5  Secrets"
+# --- Étape 4 : publication ---------------------------------------------------
+# La publication vient AVANT les secrets : « wrangler secret put » exige que le
+# Worker existe déjà, sinon il échoue avec « Worker not found ».
+Titre "4/5  Publication"
+$sortie = & npx wrangler deploy 2>&1 | Out-String
+Write-Host $sortie
+
+if ($LASTEXITCODE -ne 0) { Souci "Le deploiement a echoue."; exit 1 }
+Ok "Application publiee"
+
+$adresse = ([regex]::Match($sortie, 'https://[a-z0-9.\-]+\.workers\.dev')).Value
+
+# --- Étape 5 : secrets -------------------------------------------------------
+Titre "5/5  Secrets"
 Info "Ces valeurs sont saisies directement dans le terminal et envoyees a"
 Info "Cloudflare. Elles ne transitent par aucun fichier."
+Info "Elles sont appliquees immediatement : aucune republication n'est requise."
 Write-Host ""
 
-$secretsExistants = & npx wrangler secret list 2>$null | Out-String
+$secretsExistants = & npx wrangler secret list 2>&1 | Out-String
 
 if ($secretsExistants -match 'ADMIN_PASSWORD') {
     Ok "ADMIN_PASSWORD deja defini"
@@ -91,6 +104,7 @@ if ($secretsExistants -match 'ADMIN_PASSWORD') {
     Info "Choisis un mot de passe administrateur SOLIDE."
     Info "N'utilise pas un mot de passe deja employe ailleurs."
     & npx wrangler secret put ADMIN_PASSWORD
+    if ($LASTEXITCODE -ne 0) { Souci "Echec de l'enregistrement du mot de passe." }
 }
 
 if ($secretsExistants -match 'SESSION_SECRET') {
@@ -104,15 +118,6 @@ if ($secretsExistants -match 'SESSION_SECRET') {
     Remove-Variable cle
 }
 Ok "Secrets en place"
-
-# --- Étape 5 : publication ---------------------------------------------------
-Titre "5/5  Publication"
-$sortie = & npx wrangler deploy 2>&1 | Out-String
-Write-Host $sortie
-
-if ($LASTEXITCODE -ne 0) { Souci "Le deploiement a echoue."; exit 1 }
-
-$adresse = ([regex]::Match($sortie, 'https://[a-z0-9.\-]+\.workers\.dev')).Value
 
 Write-Host ""
 Write-Host "  ================================================" -ForegroundColor Green
